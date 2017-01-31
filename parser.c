@@ -103,7 +103,7 @@ Pixel encodechar(Pixel original, int character, int maxval) {
 
 	if (gdiff > maxval) {
 		printf("Unable to encode character %c with max colour value of %d", character, maxval);
-		exit(0);
+		memexit();
 	}
 
 	Pixel encoded = {rcode, ((original.green + gdiff) % (maxval + 1)), original.blue};
@@ -141,7 +141,8 @@ int applyregex(char* regex, char* string) {
 
 	if (regcomp(&expression, regex, 0)) { //compile the regex string into address expression with flags of 0. Return 0 on success.
 		printf("Error compiling regex.\n");
-		exit(0);
+		regfree(&expression);//free memory that may or may not have been allocated. May or may not throw an error of it's own.
+		memexit();
 	}
 
 	result = regexec(&expression, string, 0, NULL, 0); //Execute compiled regex at address expression, apply to string, with flags: 0, null, 0.
@@ -149,16 +150,26 @@ int applyregex(char* regex, char* string) {
 	return result;
 }
 
-/*
+/**
  * Function reports a file format exception before exiting.
  */
 formatexception() {
 	printf("\nFile format exception\n");
+	memexit();
+}
+
+/**
+ * A function to deallocate all memory before exiting.
+ *
+ */
+memexit(){
+	//free memory
 	exit(0);
 }
 
 main(int argc, char ** argv) {
 
+parsefile(argv[1]);
 
 
 }
