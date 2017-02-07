@@ -21,7 +21,6 @@ typedef struct {
 } Node;
 
 typedef struct {
-	int commentcount;
 	Node * commentlist;
 	int width;
 	int height;
@@ -63,7 +62,6 @@ PPM parsefile(char * file) {
 		listindex->next = (Node *) malloc(sizeof(Node));
 		printf("%s", listindex->comment);
 		listindex = listindex->next;
-		ppmfile.commentcount = ppmfile.commentcount + 1;
 		if (fgets(linein, 999, fin) == NULL) { 	//If EOF is hit (or an error)
 			formatexception();
 		}
@@ -119,6 +117,25 @@ PPM parsefile(char * file) {
 	}
 
 	return ppmfile;
+}
+
+showPPM(PPM image){
+	Node * listindex;
+	int pixelcount=0;
+	
+	printf("P3\n");
+	
+	listindex=image.commentlist;
+	while(listindex != NULL){
+		printf("%s\n", listindex->comment);
+		listindex = listindex->next;
+	}
+	
+	printf("%d %d\n", image.width, image.height);
+	printf("%d\n", image.maxval);
+	
+	for(pixelcount=0;pixelcount<image.width*image.height;pixelcount++)
+		printf("%d %d %d\n", image.pixellist[pixelcount].red, image.pixellist[pixelcount].green, image.pixellist[pixelcount].blue);
 }
 
 /**
