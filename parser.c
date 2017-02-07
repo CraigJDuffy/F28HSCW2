@@ -15,18 +15,32 @@ typedef struct {
 	int blue;
 } Pixel;
 
+typedef struct {
+	char * comment;
+	struct Node * next;
+} Node;
 
+typedef struct {
+	int commentcount;
+	Node * commentlist;
+	int width;
+	int height;
+	int maxval;
+	Pixel * pixellist;
+
+} PPM;
 /**
  * A preliminary function which given a filepath will parse and validate a PPM file.
  */
-parsefile(char * file) {
+PPM parsefile(char * file) {
+	PPM ppmfile;
+	Node * listindex;
 	FILE * fin;
 	char linein[1000];
 	regex_t regex;
-	int width, height, maxval, int1, int2, int3, err, pixelcount;
+	int int1, int2, int3, err, pixelcount;
 
 	fin = fopen(file, "r");
-
 	if (fin == NULL) {
 		printf("Unable to open file: %s", file);
 	}
@@ -36,31 +50,46 @@ parsefile(char * file) {
 	/*throw new*/formatexception();
 	}
 
-	do {
-		if (fgets(linein, 999, fin) == NULL) { //If EOF is hit (or an error)
+	listindex = (Node *) malloc(sizeof(Node));
+	ppmfile.commentlist = listindex; //Both point to the empty list node
+
+	if (fgets(linein, 999, fin) == NULL) { //If EOF is hit (or an error)
 			formatexception();
 		}
-		//Put comment lines into Struct here
-	} while (applyregex("#.*", linein) == 0); //Read lines until the first non comment line is reached
+	
+	while (applyregex("#.*", linein) == 0) {	//Read lines until the first non comment line is reached
 
-	if (sscanf(linein, "%d %d", &width, &height) != 2) { //The Comment regex loop reads the first line after the comments into linein, hence scan on string.
+		listindex->comment = linein;
+		listindex->next = (Node *) malloc(sizeof(Node));
+		printf("%s", listindex->comment);
+		listindex = listindex->next;
+		ppmfile.commentcount = ppmfile.commentcount + 1;
+		if (fgets(linein, 999, fin) == NULL) { 	//If EOF is hit (or an error)
+			formatexception();
+		}
+		
+	} 
+
+	if (sscanf(linein, "%d %d", &ppmfile.width, &ppmfile.height) != 2) { //The Comment regex loop reads the first line after the comments into linein, hence scan on string.
 		formatexception(); //They are the right way round; width then height.
 	}
 
-	if (width <= 0 || height <= 0) {
+	if (ppmfile.width <= 0 || ppmfile.height <= 0) {
 		formatexception();
 	}
 
-	printf("%d\t", width);
-	printf("%d\n", height);
+	printf("%d\t", ppmfile.width);
+	printf("%d\n", ppmfile.height);
+
+	ppmfile.pixellist = (Pixel *)malloc((ppmfile.width*ppmfile.height)*sizeof(Pixel));
 
 	fgets(linein, 999, fin);
-	sscanf(linein, "%d", &maxval); //reads in max value. Should discard other characters on the same line
-	if (maxval <= 0) {
+	sscanf(linein, "%d", &ppmfile.maxval); //reads in max value. Should discard other characters on the same line
+	if (ppmfile.maxval <= 0) {
 		formatexception();
 	}
 
-	printf("%d\n", maxval);
+	printf("%d\n", ppmfile.maxval);
 
 	err = fscanf(fin, "%d %d %d", &int1, &int2, &int3); //Read in the first three RGB values; 1 pixel.
 	pixelcount = 0; //Barring error (where it doesn't matter), is set to 1 immediately in the loop.
@@ -68,11 +97,12 @@ parsefile(char * file) {
 		pixelcount++;
 
 
-		if (int1 > maxval || int2 > maxval || int3 > maxval || pixelcount > (width * height)) { //Check for validity
+		if (int1 > ppmfile.maxval || int2 > ppmfile.maxval || int3 > ppmfile.maxval || pixelcount > (ppmfile.width * ppmfile.height)) { //Check for validity
 			formatexception();
 		}
-
-		printf("%d %d %d\n", int1, int2, int3);
+		Pixel temp = {int1, int2, int3};
+		ppmfile.pixellist[pixelcount] =temp;
+		printf("%d %d %d\n",ppmfile.pixellist[pixelcount].red ,ppmfile.pixellist[pixelcount].blue, ppmfile.pixellist[pixelcount].green);
 		err = fscanf(fin, "%d %d %d", &int1, &int2, &int3); //Try to read next three values
 
 	}
@@ -84,9 +114,11 @@ parsefile(char * file) {
 		formatexception();
 	}
 
-	if (pixelcount != (width * height)) {
+	if (pixelcount != (ppmfile.width * ppmfile.height)) {
 		formatexception();
 	}
+
+	return ppmfile;
 }
 
 /**
@@ -103,7 +135,7 @@ Pixel encodechar(Pixel original, int character, int maxval) {
 
 	if (gdiff > maxval) {
 		printf("Unable to encode character %c with max colour value of %d", character, maxval);
-		memexit();
+		exit(0);
 	}
 
 	Pixel encoded = {rcode, ((original.green + gdiff) % (maxval + 1)), original.blue};
@@ -142,7 +174,7 @@ int applyregex(char* regex, char* string) {
 	if (regcomp(&expression, regex, 0)) { //compile the regex string into address expression with flags of 0. Return 0 on success.
 		printf("Error compiling regex.\n");
 		regfree(&expression);//free memory that may or may not have been allocated. May or may not throw an error of it's own.
-		memexit();
+		exit(0);
 	}
 
 	result = regexec(&expression, string, 0, NULL, 0); //Execute compiled regex at address expression, apply to string, with flags: 0, null, 0.
@@ -155,17 +187,9 @@ int applyregex(char* regex, char* string) {
  */
 formatexception() {
 	printf("\nFile format exception\n");
-	memexit();
-}
-
-/**
- * A function to deallocate all memory before exiting.
- *
- */
-memexit(){
-	//free memory
 	exit(0);
 }
+
 
 main(int argc, char ** argv) {
 
