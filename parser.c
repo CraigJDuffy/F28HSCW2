@@ -7,12 +7,15 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h> //For strlen and strcpy
+#include <unistd.h> //Only for usleep
 #include <regex.h>
 
 typedef struct {
 	int red;
 	int green;
 	int blue;
+	int dirty;
 } Pixel;
 
 typedef struct {
@@ -49,8 +52,8 @@ PPM parsefile(char * file) {
 	/*throw new*/formatexception();
 	}
 
-	listindex = (Node *) malloc(sizeof(Node));
-	ppmfile.commentlist = listindex; //Both point to the empty list node
+	ppmfile.commentlist = (Node *) malloc(sizeof(Node));
+	listindex = ppmfile.commentlist; //Both point to the empty list node
 
 	if (fgets(linein, 999, fin) == NULL) { //If EOF is hit (or an error)
 			formatexception();
@@ -58,10 +61,13 @@ PPM parsefile(char * file) {
 	
 	while (applyregex("#.*", linein) == 0) {	//Read lines until the first non comment line is reached
 
-		listindex->comment = linein;
+		listindex->comment = (char *) malloc(strlen(linein));//Space must be allocated for the next line to work, otherwise malloc memory gets corrupted.
+																//Probably from trying to copy the string into unallocated space
+		strcpy(listindex->comment,linein);	//Copies the string (char *) linein into the comment string(char *).Straight up comment=linein doesn't work, as the address of linein doesn't ever change but the referenced string does.
+											//In other words all copies of comment will point to linein, whose value changes, such that all comments become the last thing stored in linein.
 		listindex->next = (Node *) malloc(sizeof(Node));
-		printf("%s", listindex->comment);
 		listindex = listindex->next;
+		listindex->next = NULL;
 		if (fgets(linein, 999, fin) == NULL) { 	//If EOF is hit (or an error)
 			formatexception();
 		}
@@ -90,17 +96,15 @@ PPM parsefile(char * file) {
 	printf("%d\n", ppmfile.maxval);
 
 	err = fscanf(fin, "%d %d %d", &int1, &int2, &int3); //Read in the first three RGB values; 1 pixel.
-	pixelcount = 0; //Barring error (where it doesn't matter), is set to 1 immediately in the loop.
+	pixelcount = 0;
 	while (err == 3) { //While 3 values have successfully been read.
-		pixelcount++;
-
-
-		if (int1 > ppmfile.maxval || int2 > ppmfile.maxval || int3 > ppmfile.maxval || pixelcount > (ppmfile.width * ppmfile.height)) { //Check for validity
+		if (int1 > ppmfile.maxval || int2 > ppmfile.maxval || int3 > ppmfile.maxval || pixelcount >= (ppmfile.width * ppmfile.height)) { //Check for validity
 			formatexception();
 		}
-		Pixel temp = {int1, int2, int3};
+		Pixel temp = {int1, int2, int3, 0};
 		ppmfile.pixellist[pixelcount] =temp;
-		printf("%d %d %d\n",ppmfile.pixellist[pixelcount].red ,ppmfile.pixellist[pixelcount].blue, ppmfile.pixellist[pixelcount].green);
+		printf("%d %d %d\n",ppmfile.pixellist[pixelcount].red ,ppmfile.pixellist[pixelcount].green, ppmfile.pixellist[pixelcount].blue);
+		pixelcount++;
 		err = fscanf(fin, "%d %d %d", &int1, &int2, &int3); //Try to read next three values
 
 	}
@@ -119,6 +123,10 @@ PPM parsefile(char * file) {
 	return ppmfile;
 }
 
+
+/**
+ * Given a PPM image the function prints the corresponding file format to standard out.
+ */
 showPPM(PPM image){
 	Node * listindex;
 	int pixelcount=0;
@@ -126,8 +134,8 @@ showPPM(PPM image){
 	printf("P3\n");
 	
 	listindex=image.commentlist;
-	while(listindex != NULL){
-		printf("%s\n", listindex->comment);
+	while(listindex->next != NULL){
+		printf("%s", listindex->comment);
 		listindex = listindex->next;
 	}
 	
@@ -138,24 +146,27 @@ showPPM(PPM image){
 		printf("%d %d %d\n", image.pixellist[pixelcount].red, image.pixellist[pixelcount].green, image.pixellist[pixelcount].blue);
 }
 
+
+
 /**
  * Encodes a given integer into a Pixel format.
  * The integer is encoded as an absolute value for the red value, and as an offset for the green value.
  * The encoding provides for (maxval+1)*(maxval) possible values.
+ * The function does not check the cleanliness of the give pixel.
  */
-Pixel encodechar(Pixel original, int character, int maxval) {
+Pixel encodechar(Pixel original, unsigned int character, int maxval) {
 	int rcode, gdiff;
-	int c = character;
+	unsigned int c = character;
 
 	rcode = c % (maxval + 1);
 	gdiff = c / (maxval + 1); //Truncated towards 0. If maxval is negative the effect is ceiling, not floor.
 
-	if (gdiff > maxval) {
-		printf("Unable to encode character %c with max colour value of %d", character, maxval);
+	if ((gdiff) > maxval) {
+		printf("Unable to encode character %c with max colour value of %d\n", character, maxval);
 		exit(0);
 	}
 
-	Pixel encoded = {rcode, ((original.green + gdiff) % (maxval + 1)), original.blue};
+	Pixel encoded = {rcode, ((original.green + gdiff) % (maxval + 1)), original.blue +1, 1}; //1 is added to the blue field so that dirty pixels can always be identified when compared with the original
 
 	return encoded;
 
@@ -166,7 +177,7 @@ Pixel encodechar(Pixel original, int character, int maxval) {
  * Function will always return a value, even if the pixels are identical.
  * Behaviour where max value is inconsistent with the encoding is undefined.
  */
-int decodepixel(Pixel original, Pixel encoded, int maxval) {
+unsigned int decodepixel(Pixel original, Pixel encoded, int maxval) {
 	int factor;
 
 	if (encoded.green >= original.green) {
@@ -178,6 +189,69 @@ int decodepixel(Pixel original, Pixel encoded, int maxval) {
 	return encoded.red + (factor * (maxval + 1));
 
 }
+
+
+/**
+ * Given a PPM image and a string message, encodes the message in the image.
+ * The function will exit with an error message if the given string is too long for the image IE more characters than pixels.
+ */
+PPM encodePPM(char* message, PPM image){
+	int pixelcount = image.height*image.width, pxlindex = 0, msgindex = 0, msglen = strlen(message);
+	char temp;
+
+	srand(pixelcount);
+
+	if (msglen > pixelcount){
+		printf("Message too large for selected image");
+		exit(0);
+	}
+
+	for(;msgindex<msglen;msgindex++){ //Iterates over each character in the message
+			do{
+				pxlindex = rand()%pixelcount;
+			} while (image.pixellist[pxlindex].dirty);	//Continually tries to find a 'clean' pixel
+
+			image.pixellist[pxlindex] = encodechar(image.pixellist[pxlindex], message[msgindex], image.maxval); //Updates the selected pixel
+	}
+
+	return image;
+
+}
+
+/**
+ * Note that output from encodePPM should not be directly passed to this function, as this function assumes the dirty bit for each pixel is 0 as provided by parsefile.
+ */
+char * decodePPM(PPM original, PPM encoded){
+	int pixelcount, pxlindex = 0, msgindex =0;
+
+	if (original.height != encoded.height || original.width != encoded.width || original.maxval != encoded.maxval){
+		printf("Fatal file mismatch");
+		exit(0);
+	}
+
+	pixelcount = encoded.height*encoded.width;
+
+	srand(pixelcount);
+
+	char * message = (char *) malloc(pixelcount*(sizeof(char)));
+
+	for(; msgindex<pixelcount;msgindex++){
+		do{
+			pxlindex = rand()%pixelcount;
+		} while (encoded.pixellist[pxlindex].dirty); //Constantly searches for a pixel which hasn't been read from yet.
+
+		if(original.pixellist[pxlindex].blue == encoded.pixellist[pxlindex].blue){
+			break; //If the two pixels are the same then the message end must have been reached.
+		}
+
+		encoded.pixellist[pxlindex].dirty = 1;
+		message[msgindex] = decodepixel(original.pixellist[pxlindex], encoded.pixellist[pxlindex], encoded.maxval);
+	}
+
+	return message;
+
+}
+
 
 /**
  * Function applies a given regex to a string, returning 0 on match or 1 on fail.
@@ -210,7 +284,8 @@ formatexception() {
 
 main(int argc, char ** argv) {
 
-parsefile(argv[1]);
+//showPPM(encodePPM("Hp", parsefile(argv[1])));
 
+	printf("%s", decodePPM(parsefile(argv[1]), parsefile(argv[2])));
 
 }
