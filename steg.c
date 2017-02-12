@@ -11,6 +11,8 @@
 #include <unistd.h> //For getopt
 #include <regex.h>
 
+#define HELPSTRING "steg <-e | -c | -d <encoded file>> <base PPM file> [-m <message>] [-o <output file>] [-v]\n-d \e[4mencoded file\e[0m = decode the specified file\n-m \e[4mmessage\e[0m \t= specify message\n-o \e[4moutput file\e[0m \t= specify output file\n-e \t\t= encode\n-v \t\t= verbose\n-c \t\t= check file\n"
+
 typedef struct {
 	int red;
 	int green;
@@ -33,6 +35,8 @@ typedef struct {
 } PPM;
 
 int verbose = 0;
+int redirect =0;
+FILE * streamout;
 
 /**
  * A preliminary function which given a filepath will parse and validate a PPM file.
@@ -44,12 +48,12 @@ PPM parsefile(FILE * fin) {
 	regex_t regex;
 	int int1, int2, int3, err, pixelcount;
 
-	if (verbose) printf("Parsing file\n");
+	if (verbose) fprintf(streamout, "Parsing file\n");
 
 	fgets(linein, 999, fin);
-	if(verbose) printf("%s", linein);
+	if(verbose) fprintf(streamout, "%s", linein);
 
-	if (applyregex("P3", linein)) { //Checks first line of file is "P3"
+	if (applyregex("^P3\r*$", linein)) { //Checks first line of file is "P3" and only P3. "\r*" required to handle windows/unix differences
 	/*throw new*/formatexception();
 	}
 
@@ -60,9 +64,9 @@ PPM parsefile(FILE * fin) {
 			formatexception();
 		}
 	
-	if(verbose) printf("%s", linein);
+	if(verbose) fprintf(streamout, "%s", linein);
 
-	while (applyregex("#.*", linein) == 0) {	//Read lines until the first non comment line is reached
+	while (applyregex("^#.*$", linein) == 0) {	//Read lines until the first non comment line is reached. Note "\r*" not required as "." matches "\r"
 
 		listindex->comment = (char *) malloc(strlen(linein));//Space must be allocated for the next line to work, otherwise malloc memory gets corrupted.
 																//Probably from trying to copy the string into unallocated space
@@ -74,7 +78,7 @@ PPM parsefile(FILE * fin) {
 		if (fgets(linein, 999, fin) == NULL) { 	//If EOF is hit (or an error)
 			formatexception();
 		}
-		if(verbose) printf("%s", linein);
+		if(verbose) fprintf(streamout, "%s", linein);
 		
 	} 
 
@@ -89,7 +93,7 @@ PPM parsefile(FILE * fin) {
 	ppmfile.pixellist = (Pixel *)malloc((ppmfile.width*ppmfile.height)*sizeof(Pixel));
 
 	fgets(linein, 999, fin);
-	if(verbose) printf("%s", linein);
+	if(verbose) fprintf(streamout, "%s", linein);
 	sscanf(linein, "%d", &ppmfile.maxval); //reads in max value. Should discard other characters on the same line
 	if (ppmfile.maxval <= 0) {
 		formatexception();
@@ -103,7 +107,7 @@ PPM parsefile(FILE * fin) {
 		}
 		Pixel temp = {int1, int2, int3, 0};
 		ppmfile.pixellist[pixelcount] =temp;
-		if(verbose) printf("%d: \t%d %d %d\n",pixelcount, ppmfile.pixellist[pixelcount].red ,ppmfile.pixellist[pixelcount].green, ppmfile.pixellist[pixelcount].blue);
+		if(verbose) fprintf(streamout, "%d: \t%d %d %d\n",pixelcount, ppmfile.pixellist[pixelcount].red ,ppmfile.pixellist[pixelcount].green, ppmfile.pixellist[pixelcount].blue);
 		pixelcount++;
 		err = fscanf(fin, "%d %d %d", &int1, &int2, &int3); //Try to read next three values
 
@@ -111,9 +115,9 @@ PPM parsefile(FILE * fin) {
 
 	if (err == EOF) {
 		if(verbose){
-			printf("End of File\n\n");
-			printf("Press enter to continue\n\n");
-			getchar();
+			fprintf(streamout, "End of File\n\n");
+			if(!redirect) printf("Press enter to continue\n\n");
+			if(!redirect) getchar(); //Only pause for input when outputting to stdout.
 		}
 	} else {
 		//Pixels not multiple of three, or potentially another error.
@@ -136,24 +140,24 @@ showPPM(PPM image){
 	int pixelcount=0;
 	
 	if(verbose){
-		printf("\nDisplaying PPM\n\n");
-		printf("Press enter to continue\n\n");
-		getchar();
+		fprintf(streamout, "\nDisplaying PPM\n\n");
+		if(!redirect)printf("Press enter to continue\n\n");
+		if(!redirect)getchar(); //Only pause for input when outputting to stdout.
 	}
 
-	printf("P3\n");
+	fprintf(streamout, "P3\n");
 	
 	listindex=image.commentlist;
 	while(listindex->next != NULL){
-		printf("%s", listindex->comment);
+		fprintf(streamout, "%s", listindex->comment);
 		listindex = listindex->next;
 	}
 	
-	printf("%d %d\n", image.width, image.height);
-	printf("%d\n", image.maxval);
+	fprintf(streamout, "%d %d\n", image.width, image.height);
+	fprintf(streamout, "%d\n", image.maxval);
 	
 	for(pixelcount=0;pixelcount<image.width*image.height;pixelcount++)
-		printf("%d %d %d\n", image.pixellist[pixelcount].red, image.pixellist[pixelcount].green, image.pixellist[pixelcount].blue);
+		fprintf(streamout, "%d %d %d\n", image.pixellist[pixelcount].red, image.pixellist[pixelcount].green, image.pixellist[pixelcount].blue);
 }
 
 
@@ -172,11 +176,12 @@ Pixel encodechar(Pixel original, unsigned int character, int maxval) {
 	gdiff = c / (maxval + 1); //Truncated towards 0. If maxval is negative the effect is ceiling, not floor.
 
 	if ((gdiff) > maxval) {
-		printf("Unable to encode character %c with max colour value of %d\n", character, maxval);
+		fprintf(streamout, "Unable to encode character %c with max colour value of %d\n", character, maxval);
+		if(redirect) printf("Unable to encode character %c with max colour value of %d\n", character, maxval);
 		exit(0);
 	}
 
-	Pixel encoded = {rcode, ((original.green + gdiff) % (maxval + 1)), original.blue +1, 1}; //1 is added to the blue field so that dirty pixels can always be identified when compared with the original
+	Pixel encoded = {rcode, ((original.green + gdiff) % (maxval + 1)), (original.blue +1) % (maxval+1), 1}; //1 is added to the blue field so that dirty pixels can always be identified when compared with the original
 
 	return encoded;
 
@@ -209,13 +214,14 @@ PPM encodePPM(char* message, PPM image){
 	int pixelcount = image.height*image.width, pxlindex = 0, msgindex = 0, msglen;
 	char temp;
 
-	if(verbose) printf("Encoding message \"%s\"\n", message);
+	if(verbose) fprintf(streamout, "Encoding message \"%s\"\n", message);
 
 	msglen = strlen(message);
 	srand(pixelcount);
 
 	if (msglen > pixelcount){
-		printf("Message too large for selected image");
+		fprintf(streamout, "Message too large for selected image\n");
+		if(redirect) printf("Message too large for selected image\n");
 		exit(0);
 	}
 
@@ -224,7 +230,7 @@ PPM encodePPM(char* message, PPM image){
 				pxlindex = rand()%pixelcount;
 			} while (image.pixellist[pxlindex].dirty);	//Continually tries to find a 'clean' pixel
 
-			if(verbose) printf("Encoding pixel %d\n", pxlindex);
+			if(verbose) fprintf(streamout, "Encoding pixel %d\n", pxlindex);
 			image.pixellist[pxlindex] = encodechar(image.pixellist[pxlindex], message[msgindex], image.maxval); //Updates the selected pixel
 	}
 
@@ -239,10 +245,11 @@ PPM encodePPM(char* message, PPM image){
 char * decodePPM(PPM original, PPM encoded){
 	int pixelcount, pxlindex = 0, msgindex =0;
 
-	if(verbose) printf("Decoding image\n");
+	if(verbose) fprintf(streamout, "Decoding image\n");
 
 	if (original.height != encoded.height || original.width != encoded.width || original.maxval != encoded.maxval){
-		printf("Fatal file mismatch");
+		fprintf(streamout, "Fatal file mismatch\n");
+		if(redirect) printf("Fatal file mismatch\n");
 		exit(0);
 	}
 
@@ -250,7 +257,7 @@ char * decodePPM(PPM original, PPM encoded){
 
 	srand(pixelcount);
 
-	char * message = (char *) malloc(pixelcount*(sizeof(char)));
+	char * message = (char *) malloc(pixelcount*(sizeof(char))); //The absolute maximum size possible for a message
 
 	for(; msgindex<pixelcount;msgindex++){
 		do{
@@ -258,17 +265,17 @@ char * decodePPM(PPM original, PPM encoded){
 		} while (encoded.pixellist[pxlindex].dirty); //Constantly searches for a pixel which hasn't been read from yet.
 
 		if(original.pixellist[pxlindex].blue == encoded.pixellist[pxlindex].blue){
-			if(verbose) printf("End of message at pixel %d\n", pxlindex);
+			if(verbose) fprintf(streamout, "End of message at pixel %d\n", pxlindex);
 			break; //If the two pixels are the same then the message end must have been reached.
 		}
 
 		encoded.pixellist[pxlindex].dirty = 1; //Has been read from
-		if(verbose) printf("Decoding pixel %d\n", pxlindex);
+		if(verbose) fprintf(streamout, "Decoding pixel %d\n", pxlindex);
 		message[msgindex] = decodepixel(original.pixellist[pxlindex], encoded.pixellist[pxlindex], encoded.maxval);
 		message[msgindex+1] = '\0';
 	}
 
-	if(verbose) printf("Message decoded\n\n");
+	if(verbose) fprintf(streamout, "Message decoded\n\n");
 
 	return message;
 
@@ -284,8 +291,9 @@ int applyregex(char* regex, char* string) {
 	int result;
 	regex_t expression;
 
-	if (regcomp(&expression, regex, 0)) { //compile the regex string into address expression with flags of 0. Return 0 on success.
-		printf("Error compiling regex.\n");
+	if (regcomp(&expression, regex, REG_NEWLINE)) { //compile the regex string into address expression with flags of 0. Return 0 on success.
+		fprintf(streamout, "Error compiling regex.\n");
+		if(redirect) printf("\nError compiling regex\n"); //Print to stdout in addition to the file
 		regfree(&expression);//free memory that may or may not have been allocated. May or may not throw an error of it's own.
 		exit(0);
 	}
@@ -298,15 +306,16 @@ int applyregex(char* regex, char* string) {
 /**
  * A somewhat superfluous function for opening a file for reading, with built in error checking and 'handling'
  */
-FILE * openf(char * filepath){
+FILE * openf(char * filepath, char * mode){
 	FILE * f;
 
-	if(verbose) printf("Opening file \"%s\"\n", filepath);
+	if(verbose) fprintf(streamout, "Opening file \"%s\"\n", filepath);
 
-	f = fopen(filepath, "r");
+	f = fopen(filepath, mode);
 
 	if (f==NULL){
-		printf("Unable to open file: %s\n", filepath);
+		fprintf(streamout, "Unable to open file: %s\n", filepath);
+		if(redirect) printf("\nUnable to open file: %s\n", filepath); //Print to stdout in addition to the file
 		exit(0);
 	}
 
@@ -318,7 +327,8 @@ FILE * openf(char * filepath){
  * Another superfluous function which can be accused of pointlessness, other than cutting down of repetition of the two lines in parsefile.
  */
 formatexception() {
-	printf("\nFile format exception\n");
+	fprintf(streamout, "\nFile format exception\n");
+	if(redirect) printf("\nFile format exception\n"); //Print to stdout in addition to the file
 	exit(0);
 }
 
@@ -331,11 +341,16 @@ This doesn't work, the compiler thinks message is an integer. However the follow
 */
 char * encodedfile;
 char * message;
+char input[5001];
 
 opterr=0;
+streamout = stdout;
 
-while((opt=getopt(argc, argv, "hced:vm:")) != -1){
+while((opt=getopt(argc, argv, "hced:vm:o:")) != -1){
 	switch (opt){
+	case 'h':
+		printf("Usage:\n%s", HELPSTRING);
+		exit(0);
 	case 'e':
 		enc=1;
 		break;
@@ -352,11 +367,11 @@ while((opt=getopt(argc, argv, "hced:vm:")) != -1){
 		break;
 	case 'c':
 		check=1;
-		verbose=1;
 		break;
-	case 'h':
-		printf("Usage:\nsteg [-m <message>] [-v] <-e | -d <encoded file> | -c> <base PPM file>\n-e = encode\n-d \e[4mencoded file\e[0m = decode the specified file\n-m \e[4mmessage\e[0m = specify message\n-v = verbose\n-c = check file\n");
-		exit(0);
+	case 'o':
+		streamout = openf(optarg, "w");
+		redirect=1;
+		break;
 	case '?':
 		switch (optopt){
 		case 'd':
@@ -364,6 +379,9 @@ while((opt=getopt(argc, argv, "hced:vm:")) != -1){
 			break;
 		case 'm':
 			printf("Missing option-argument:\n-m \e[4mmessage\e[0m = specify message\n");
+			break;
+		case 'o':
+			printf("Missing option-argument:\n-o \e[4moutput file\e[0m = specify output file\n");
 			break;
 		default:
 			printf("Unidentified option: %c\n", optopt);
@@ -382,23 +400,28 @@ if (enc + dec + check > 1){
 	printf("Options -e, -c, and -d are mutually exclusive.\n");
 	exit(0);
 }else if ((enc+dec+check)==0){
-	printf("Must specify mode of operation:\nsteg [-m <message>] [-v] <-e | -d <encoded file> | -c> <base PPM file>\n-e = encode\n-d \e[4mencoded file\e[0m = decode the specified file\n-m \e[4mmessage\e[0m = specify message\n-v = verbose\n-c = check file\n");
+	printf("Must specify mode of operation:Encode, Decode, or File Check\n%s", HELPSTRING);
 	exit(0);
 } else if (enc){
 	if (mes){
-		showPPM(encodePPM(message, parsefile(openf(argv[optind]))));
+		showPPM(encodePPM(message, parsefile(openf(argv[optind], "r"))));
+		if(redirect) printf("Message encoded\n");
 	}
 	else {
-		//Get message, show it
+		printf("\nMessages longer than 5000 Bytes will be truncated without warning.\n");
+		printf("Please enter message to encode >>");
+		fgets(input, 5000, stdin); //Note the array is defined as 5001, accommodating the terminating character
+		printf("\n");
+		showPPM(encodePPM(input, parsefile(openf(argv[optind], "r"))));
+		if(redirect) printf("Message encoded\n");
 	}
 } else if (dec){
-	printf("Message reads:\n%s\n", decodePPM(parsefile(openf(argv[optind])), parsefile(openf(encodedfile))));
+	fprintf(streamout, "\nMessage reads:\n%s\n", decodePPM(parsefile(openf(argv[optind], "r")), parsefile(openf(encodedfile, "r"))));
+	if(redirect) printf("Message decoded\n");
 } else if (check) {
-	parsefile(openf(argv[optind]));
-	printf("File is valid\n\n");
+	parsefile(openf(argv[optind], "r"));
+	fprintf(streamout, "\nFile is valid\n");
 }
-//showPPM(encodePPM("Hp", parsefile(openf(argv[1]))));
 
-	//printf("%s", decodePPM(parsefile(openf(argv[1])), parsefile(openf(argv[2]))));
 
 }
