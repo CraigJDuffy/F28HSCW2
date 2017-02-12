@@ -39,7 +39,8 @@ int redirect =0;
 FILE * streamout;
 
 /**
- * A preliminary function which given a filepath will parse and validate a PPM file.
+ * A function to parse and load for use a simple PPM plain text file.
+ * Memory allocated in this function can be freed using the freePPM function.
  */
 PPM parsefile(FILE * fin) {
 	PPM ppmfile;
@@ -133,7 +134,9 @@ PPM parsefile(FILE * fin) {
 
 
 /**
- * Given a PPM image the function prints the corresponding file format to standard out.
+ * Given a PPM image the function consumes it and prints the corresponding file format to the file stream specified in global variable streamout.
+ * The function defaults to standard out, though the user may change this with command line option invocation.
+ *
  */
 showPPM(PPM image){
 	Node * listindex;
@@ -158,6 +161,8 @@ showPPM(PPM image){
 	
 	for(pixelcount=0;pixelcount<image.width*image.height;pixelcount++)
 		fprintf(streamout, "%d %d %d\n", image.pixellist[pixelcount].red, image.pixellist[pixelcount].green, image.pixellist[pixelcount].blue);
+
+	freePPM(image); //This handles freeing memory when encoding.
 }
 
 
@@ -166,7 +171,7 @@ showPPM(PPM image){
  * Encodes a given integer into a Pixel format.
  * The integer is encoded as an absolute value for the red value, and as an offset for the green value.
  * The encoding provides for (maxval+1)*(maxval) possible values.
- * The function does not check the cleanliness of the give pixel.
+ * The function does not check the cleanliness of the given pixel.
  */
 Pixel encodechar(Pixel original, unsigned int character, int maxval) {
 	int rcode, gdiff;
@@ -239,7 +244,7 @@ PPM encodePPM(char* message, PPM image){
 }
 
 /**
- * A function which given two PPM 'objects' will decode the message. Behaviour on identical images is as yet undefined
+ * A function which given two PPM 'objects' will consume them and decode the message. Behaviour on identical images is as yet undefined
  * Note that output from encodePPM should not be directly passed to this function, as both rely on the pixel dirty bit for different purposes.
  */
 char * decodePPM(PPM original, PPM encoded){
@@ -258,6 +263,7 @@ char * decodePPM(PPM original, PPM encoded){
 	srand(pixelcount);
 
 	char * message = (char *) malloc(pixelcount*(sizeof(char))); //The absolute maximum size possible for a message
+	//Memory freed in calling if statement in main method.
 
 	for(; msgindex<pixelcount;msgindex++){
 		do{
@@ -277,10 +283,34 @@ char * decodePPM(PPM original, PPM encoded){
 
 	if(verbose) fprintf(streamout, "Message decoded\n\n");
 
+	freePPM(original);
+	freePPM(encoded);//Free the memory of the PPM images, now that they're no longer needed.
+
 	return message;
 
 }
 
+/**
+ * A method for handling memory deallocation for the internals of a PPM image.
+ * Note that this function does not free the memory directly represented by image, just the memory to which the image attributes point.
+ */
+freePPM(PPM image){
+	Node * listindex;
+	Node * delindex;
+
+	listindex=image.commentlist;
+	delindex=image.commentlist;
+	while(listindex->next != NULL){
+		free(listindex->comment);
+		listindex = listindex->next;
+		free(delindex);
+		delindex=listindex;
+	}
+
+	free(delindex); //Frees the last, empty node in the list. Such a node is not deleted in the loop due to the next field being null and the loop terminating.
+
+	free(image.pixellist);
+}
 
 /**
  * Function applies a given regex to a string, returning 0 on match or 1 on fail.
@@ -291,7 +321,7 @@ int applyregex(char* regex, char* string) {
 	int result;
 	regex_t expression;
 
-	if (regcomp(&expression, regex, REG_NEWLINE)) { //compile the regex string into address expression with flags of 0. Return 0 on success.
+	if (regcomp(&expression, regex, REG_NEWLINE)) { //compile the regex string into address expression. Return 0 on success.
 		fprintf(streamout, "Error compiling regex.\n");
 		if(redirect) printf("\nError compiling regex\n"); //Print to stdout in addition to the file
 		regfree(&expression);//free memory that may or may not have been allocated. May or may not throw an error of it's own.
@@ -404,7 +434,7 @@ if (enc + dec + check > 1){
 	exit(0);
 } else if (enc){
 	if (mes){
-		showPPM(encodePPM(message, parsefile(openf(argv[optind], "r"))));
+		showPPM(encodePPM(message, parsefile(openf(argv[optind], "r")))); //PPM consumed by showPPM function. No memory freeing required here.
 		if(redirect) printf("Message encoded\n");
 	}
 	else {
@@ -412,14 +442,16 @@ if (enc + dec + check > 1){
 		printf("Please enter message to encode >>");
 		fgets(input, 5000, stdin); //Note the array is defined as 5001, accommodating the terminating character
 		printf("\n");
-		showPPM(encodePPM(input, parsefile(openf(argv[optind], "r"))));
+		showPPM(encodePPM(input, parsefile(openf(argv[optind], "r")))); //PPM consumed by showPPM function. No memory freeing required here.
 		if(redirect) printf("Message encoded\n");
 	}
 } else if (dec){
-	fprintf(streamout, "\nMessage reads:\n%s\n", decodePPM(parsefile(openf(argv[optind], "r")), parsefile(openf(encodedfile, "r"))));
+	message = decodePPM(parsefile(openf(argv[optind], "r")), parsefile(openf(encodedfile, "r"))); //PPM images consumed by decodePPM, no memory freeing required here.
+	fprintf(streamout, "\nMessage reads:\n%s\n", message);
 	if(redirect) printf("Message decoded\n");
+	free(message); //Frees memory from decodePPM
 } else if (check) {
-	parsefile(openf(argv[optind], "r"));
+	freePPM(parsefile(openf(argv[optind], "r")));
 	fprintf(streamout, "\nFile is valid\n");
 }
 
