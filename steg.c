@@ -129,6 +129,8 @@ PPM parsefile(FILE * fin) {
 		formatexception();
 	}
 
+	fclose(fin);
+
 	return ppmfile;
 }
 
@@ -455,5 +457,5 @@ if (enc + dec + check > 1){
 	fprintf(streamout, "\nFile is valid\n");
 }
 
-
+fclose(streamout);
 }
