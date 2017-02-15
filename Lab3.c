@@ -56,13 +56,13 @@ struct Room * newRoom(char * name){
 showRoom(struct Room * room){
 	int i =0, hasexit=0;
 	printf("\nRoom:\t%sConnects to:\n", room->name);
-	printf("%d",room->dc);
+
 
 	for (;i<room->dc;i++){
-		//if(room->doors[i]->room != NULL){
+		if(room->doors[i]->room != NULL){
 			printf("%d: %s",i, room->doors[i]->name);
 			hasexit=1;
-		//}
+		}
 	}
 
 	if(!hasexit){
@@ -106,9 +106,7 @@ for (;outerroomcount<rc;outerroomcount++){
 	for (doorcount=0;doorcount<roomlist[outerroomcount]->dc;doorcount++){
 		for(innerroomcount=0;innerroomcount<rc;innerroomcount++){
 			if(strcmp(roomlist[outerroomcount]->doors[doorcount]->name, roomlist[innerroomcount]->name)==0){
-				printf("%p\t%p\t\t",roomlist[outerroomcount]->doors[doorcount]->room,roomlist[innerroomcount]);
 				roomlist[outerroomcount]->doors[doorcount]->room = roomlist[innerroomcount];
-				printf("%p\t%p\n",roomlist[outerroomcount]->doors[doorcount]->room,roomlist[innerroomcount]);
 			}
 		}
 	}
@@ -138,7 +136,7 @@ main(int argc, char ** argv){
 			printf("Invalid choice\n");
 			goto Invalid;
 		}
-		curroom=curroom->doors[choice];
+		curroom=curroom->doors[choice]->room;
 	}
 
 }
