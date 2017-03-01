@@ -1,5 +1,5 @@
 /*
- * parser.c
+ * steg.c
  *
  *  Created on: 28 Jan 2017
  *      Author: Tommy
@@ -71,7 +71,7 @@ PPM parsefile(FILE * fin) {
 
 		listindex->comment = (char *) malloc(strlen(linein));//Space must be allocated for the next line to work, otherwise malloc memory gets corrupted.
 																//Probably from trying to copy the string into unallocated space
-		strcpy(listindex->comment,linein);	//Copies the string (char *) linein into the comment string(char *).Straight up comment=linein doesn't work, as the address of linein doesn't ever change but the referenced string does.
+		strcpy(listindex->comment,linein);	//Copies the string (char *) linein into the comment string(char *). Straight up comment=linein doesn't work, as the address of linein doesn't ever change but the referenced string does.
 											//In other words all copies of comment will point to linein, whose value changes, such that all comments become the last thing stored in linein.
 		listindex->next = (Node *) malloc(sizeof(Node));
 		listindex = listindex->next;
