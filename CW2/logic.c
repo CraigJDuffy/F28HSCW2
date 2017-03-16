@@ -64,7 +64,7 @@ int * getGuess(){
 }
 
 void showResult(Result res){
-	//ARM Assembly goes here
+	
 	printf("Exact: %d\n", res.exact);
 	printf("Approximate: %d\n", res.approximate);
 }
@@ -130,6 +130,8 @@ void main(int argc, char ** argv){
 		printf("Argument options must be greater than 0");
 		exit(0);
 	}
+	
+
 	
 	//The loop goes forever if a letter is input when prompted.
 	//I have no idea why.
