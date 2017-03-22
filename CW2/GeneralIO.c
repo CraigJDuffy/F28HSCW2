@@ -13,6 +13,9 @@
 #define GPFSEL_OUTPUT 0x01
 #define GPFSEL_INPUT 0x00
 
+/*
+ * Inline Assembly method for setting the function of a BCM pin
+ * */
 pinMode(volatile int * gpio, int pin, unsigned char function){
 	int GPFSEL = (pin/10)*4;
 	int bitshift = (pin%10)*3;
@@ -34,6 +37,10 @@ pinMode(volatile int * gpio, int pin, unsigned char function){
 	);
 }
 
+
+/*
+ * Inline assembly function to set a BCM pin high or low
+ * */
 digitalWrite(volatile int * gpio, int pin, int state){
 		asm(
 		"	alovelylabel:\n"
@@ -57,6 +64,9 @@ digitalWrite(volatile int * gpio, int pin, int state){
 		);
 }
 
+/*
+ * Convenience function handling the memory mapping of GPIO
+ * */
 volatile int * getGPIO(){
 	volatile int * gpio;
 	int fd;

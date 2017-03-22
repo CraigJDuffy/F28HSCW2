@@ -17,6 +17,7 @@
 #define	INST_DDADDR	0x80
 
 //Flag bits for above instructions
+//Flags are in form InstructionName_FlagName
 #define	ENTRY_SHIFT	0x01
 #define	ENTRY_INC	0x02
 
@@ -50,6 +51,17 @@ struct {
 //
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+
+
+
+//
+//Low level functions
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+//Method which 'strobes' the LCD. That is it sets the 
+//strobe pin high for a short time, then off.
+//Causes the LCD to read the values on its pins.
 lcdStrobe(volatile int * gpio, LCDPinSet * pins){
 	digitalWrite(gpio, pins->strobe, 1);
 	usleep(200);
@@ -57,6 +69,10 @@ lcdStrobe(volatile int * gpio, LCDPinSet * pins){
 	usleep(200);
 }
 
+/*
+ * Function sends 4 bits of data to the LCD pins specified.
+ * Exact bahaviour undefiend as state of RegisterSelect pin not known.
+ */
 lcd4BitData(volatile int * gpio, LCDPinSet * pins, unsigned char data){
 	int i =0;
 	for (;i<4;i++){
@@ -68,36 +84,75 @@ lcd4BitData(volatile int * gpio, LCDPinSet * pins, unsigned char data){
 	
 }
 
+/*
+ * Function sends 8 bits of data to the specified LCD pin set.
+ * Uses the lcd4BitData function to do so.
+ * Exact behaviour undefiend as state of RegisterSelect pin unknown
+ */
 lcd8BitData(volatile int * gpio, LCDPinSet * pins, unsigned char data){
 	//Note, send high four bits first.
 	lcd4BitData(gpio, pins, ((data>>4) & 0x0F));
 	lcd4BitData(gpio, pins, (data & 0x0F));
 }
 
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+
+//
+//Command Functions
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+/*
+ * Function used for sending command sequences to the LCD.
+ * Data passed as command regardless of content.
+ */
 lcdCommand(volatile int * gpio, LCD * screen, unsigned char command){
 	digitalWrite(gpio, screen->pins->registerSelect, 0);
 	lcd8BitData(gpio, screen->pins, command);
 }
 
-lcdCarriageReturn(volatile int * gpio, LCD * screen){
-	screen->cursorX = 0;
+/*
+ *Function to set the LCD cursor to the same value as that held in the LCD 'object' 
+ */
+lcdSyncCursor(volatile int * gpio, LCD * screen){
 	lcdCommand(gpio, screen, screen->cursorX + (INST_DDADDR | (screen->cursorY==1 ? 0x40 : 0x00)));
 }
 
+/*
+ * Command to perform a carraige return on the LCD
+ */
+lcdCarriageReturn(volatile int * gpio, LCD * screen){
+	screen->cursorX = 0;
+	lcdSyncCursor(gpio, screen);
+}
+
+/*
+ * Command to perform a line feed on the LCD.
+ * If on the second row, the cursor wraps onto the first line.
+ */
 lcdLineFeed(volatile int * gpio, LCD * screen){
 	screen->cursorY++;
 	if(screen->cursorY >= screen->rows){
 		screen->cursorY = 0;
 	}
 	
-	lcdCommand(gpio, screen, screen->cursorX + (INST_DDADDR | (screen->cursorY==1 ? 0x40 : 0x00)));
+	lcdSyncCursor(gpio, screen);
 }
 
+/*
+ *  Command to tke a new line (combination of line feed and carraige return)
+ */
 lcdNewLine(volatile int * gpio, LCD * screen){
 	lcdLineFeed(gpio, screen);
 	lcdCarriageReturn(gpio, screen);
 }
 
+/*
+ *  Command to clear the LCD screen
+ */
 lcdClear(volatile int * gpio, LCD * screen){
 	lcdCommand(gpio, screen, INST_CLEAR);
 	usleep(50000);
@@ -105,12 +160,42 @@ lcdClear(volatile int * gpio, LCD * screen){
 	screen->cursorY =0;
 }
 
+/*
+ *  Command to 'Home' the LCD
+ */
+lcdHome(volatile int * gpio, LCD * screen){
+	lcdCommand(gpio, screen, INST_HOME);
+	usleep(50000);
+	screen->cursorX =0;
+	screen->cursorY =0;
+}
+
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+
+//
+// Data write functions
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+/*
+ * Command to write 8 bits of data to DDRAM/CGRAM
+ */
 lcdWrite(volatile int * gpio, LCD * screen, unsigned char data){
 	digitalWrite(gpio, screen->pins->registerSelect, 1);
 	lcd8BitData(gpio, screen->pins, data);
 	screen->cursorX++;
 }
 
+/*
+ * Function to print a string to the LCD.
+ * If set, the lineWrapping will keep text on the screen. Due to the behaviour of lcdLineFeed
+ * some text may be overwritten with exceptionally long strings.
+ * udelay is the delay in microseconds between sending individual characters. Use to get a 
+ * typewriter effect.
+ */
 lcdPutString(volatile int * gpio, LCD * screen, char * string, int lineWrapping, int udelay){
 	while (*string){
 		lcdWrite(gpio, screen, *string++);
@@ -120,6 +205,16 @@ lcdPutString(volatile int * gpio, LCD * screen, char * string, int lineWrapping,
 		usleep(udelay);
 	}
 }
+
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+
+//
+//Speciality Functions
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 
 lcdFauxLoading(volatile int * gpio, LCD *  screen, int utime){
 	
@@ -132,7 +227,13 @@ lcdFauxLoading(volatile int * gpio, LCD *  screen, int utime){
 	
 }
 
-lcdFauxBusy(volatile int * gpio, LCD * screen, int utime){
+/*
+ *  An infinitely running function displaying the rotating busy symbol.
+ * Intended for use as a seperate thread, though it is **not** thread safe.
+ * No other functions should interact with the LCD whilst this is running.
+ * Behaviour is undefined in such circumstances.
+ */
+lcdBusy(volatile int * gpio, LCD * screen){
 	unsigned char characters[4] = {0b01111100, 0b00101111, 0b00101101, 0b00000000};
 		int i =0;
 	
@@ -142,11 +243,13 @@ lcdFauxBusy(volatile int * gpio, LCD * screen, int utime){
 			usleep(250000);
 			lcdCommand(gpio, screen, --screen->cursorX + (INST_DDADDR | (screen->cursorY==1 ? 0x40 : 0x00)));
 		}
-		utime -= 1000000;
-	} while (utime >0);
+	} while (1);
 		
 }
 
+/*
+ *  A function to define the blaskslash character used in the busy symbol
+ */
 lcdDefineBackslash(volatile int * gpio, LCD * screen){
 	
 	lcdCommand(gpio, screen, INST_CGADDR | 0b0000000000);
@@ -177,7 +280,20 @@ lcdDefineBackslash(volatile int * gpio, LCD * screen){
 	screen->cursorY = 0;
 }
 
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+
+
+
+//
+// Constructor/Initialiser Functions
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+/*
+ *  Function which performs initialisation of the given LCD
+ * Sets the LCD to 4 bit mode, with 2 rows and incrementing entry mode.
+ */
 lcdInitialise(volatile int * gpio, LCD * screen){
 	usleep(50000);
 	lcd4BitData(gpio, screen->pins, 3);
@@ -202,6 +318,11 @@ lcdInitialise(volatile int * gpio, LCD * screen){
 	usleep(10000);
 }
 
+/*
+ *  A convenience function which will set up an LCDPinSet 'object' given the BCMpin numbers.
+ * The function sets all pins to output mode, with state of 0.
+ * 
+ */
 LCDPinSet * lcdPinSetFactory(volatile int * gpio, int strobe, int regselect, int * data){
 	LCDPinSet * pins = malloc(sizeof(LCDPinSet));
 	if (pins == NULL){
@@ -229,6 +350,10 @@ LCDPinSet * lcdPinSetFactory(volatile int * gpio, int strobe, int regselect, int
 	
 }
 
+/*
+ *  A simple function to create an instance of the LCD type with given 
+ * rows, columns and LCDPinSet
+ */
 LCD * lcdFactory(int rows, int columns, LCDPinSet * pins){
 	
 	if (rows>2){
@@ -250,5 +375,7 @@ LCD * lcdFactory(int rows, int columns, LCDPinSet * pins){
 	
 	return screen;
 } 
+
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 #endif

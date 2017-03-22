@@ -71,7 +71,7 @@ int * getGuess(){
 void showResult(Result res){
 	
 	lcdShowResult(res.exact, res.approximate);
-	ledShowResult(res.exact, res.approximate);
+	ledShowResult(res .exact, res.approximate);
 	
 	if(debug) printf("Exact: %d\nApproximate: %d\n", res.exact, res.approximate);
 }
@@ -94,13 +94,14 @@ int * generateAnswer(int colourCount){
 }
 
 void main(int argc, char ** argv){
-	int * answer;
+	int * answer, * guess;
 	Result res;
-	int opt, cCount;
+	int opt, cCount, attempts;
 	
 	debug = 0; //Initialise
 	codeLength = 3;
 	cCount=3;
+	attempts=0;
 	srand(time(NULL)); //NULL is where time() would otherwise store the result of the call
 	
 	answer=malloc(sizeof(*answer) * codeLength);
@@ -140,15 +141,24 @@ void main(int argc, char ** argv){
 		exit(0);
 	}
 	
-
+	answer = generateAnswer(cCount);
+	welcomeMessage();
 	
 	//The loop goes forever if a letter is input when prompted.
 	//I have no idea why.
 	//Doesn't matter, the input's meant to be assembly anyway.
-	answer = generateAnswer(cCount);
+
 	do {
-		res = checkGuess(getGuess(), answer);
+		lcdInputPrompt();		//begin thread
+		guess = getGuess();
+		lcdInputReceived();		//end thread
+		attempts++;
+		res = checkGuess(guess, answer);
+		if (res.exact == codeLength) break;
 		showResult(res);
 		usleep(100000);
-	} while (res.exact != codeLength);
+	} while (1);
+	
+	lcdSuccess(attempts);
+	ledSuccess();
 }
