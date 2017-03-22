@@ -1,5 +1,17 @@
+#ifndef GENERALIO_H
+#define GENERALIO_H
 
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
 
+#define BlockSize (4*1024)
+#define GPIO_Base 0x3f200000
+
+#define GPFSEL_OUTPUT 0x01
+#define GPFSEL_INPUT 0x00
 
 pinMode(volatile int * gpio, int pin, unsigned char function){
 	int GPFSEL = (pin/10)*4;
@@ -44,5 +56,27 @@ digitalWrite(volatile int * gpio, int pin, int state){
 		:"r0","r1", "r2", "r3", "cc"
 		);
 }
+
+volatile int * getGPIO(){
+	volatile int * gpio;
+	int fd;
+
+	
+	if ( (fd = open("/dev/mem",O_RDWR | O_SYNC | O_CLOEXEC)) < 0) {
+		printf("cannot open /dev/main\n");
+		exit(0);
+	}
+	
+	gpio = mmap(0, BlockSize, PROT_READ | PROT_WRITE , MAP_SHARED, fd, GPIO_Base);
+	
+	if ((int) gpio ==-1 ){
+		printf("Can't mmap\n");
+		exit(0);
+	}
+	
+	return gpio;
+}
+
+#endif
 
 

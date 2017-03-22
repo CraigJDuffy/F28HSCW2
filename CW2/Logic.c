@@ -4,6 +4,8 @@
 #include <time.h> //Used to seed rand
 #include <string.h> // memcpy
 
+#include "MastermindIO.c"
+
 struct {
 	int exact;
 	int approximate;
@@ -41,6 +43,9 @@ Result checkGuess(int * guess, int * answer){
 		}
 	}
 	
+	free(answercpy);
+	free(guess);
+	
 	//This function cannot return guess, as it has modified the values.
 	res.exact=exact;
 	res.approximate = approx;
@@ -65,8 +70,10 @@ int * getGuess(){
 
 void showResult(Result res){
 	
-	printf("Exact: %d\n", res.exact);
-	printf("Approximate: %d\n", res.approximate);
+	lcdShowResult(res.exact, res.approximate);
+	ledShowResult(res.exact, res.approximate);
+	
+	if(debug) printf("Exact: %d\nApproximate: %d\n", res.exact, res.approximate);
 }
 
 int * generateAnswer(int colourCount){
@@ -77,7 +84,7 @@ int * generateAnswer(int colourCount){
 	if (debug) printf("Secret code: ");
 	
 	for (i=0; i<codeLength; i++){
-		answer[i] = (rand() % colourCount) +1; //+1 requires else answer code may include 0
+		answer[i] = (rand() % colourCount) +1; //+1 required else answer code may include 0
 		if (debug) printf("%d  ", answer[i]);
 	}
 	
@@ -97,6 +104,8 @@ void main(int argc, char ** argv){
 	srand(time(NULL)); //NULL is where time() would otherwise store the result of the call
 	
 	answer=malloc(sizeof(*answer) * codeLength);
+	
+	initialiseMastermindIO();
 	
 	opterr=0;
 	while((opt=getopt(argc, argv, "dc:n:")) != -1){
