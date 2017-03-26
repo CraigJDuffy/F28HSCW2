@@ -4,11 +4,74 @@
 #include <pthread.h>
 #include "LCDIO.c"
 #include "GeneralIO.c"
+#include <time.h>
+
+#define BUTTON 16
+
 
 static volatile int * gpio;
 static LCD * screen;
 static int redPin, greenPin;
 pthread_t threadID;
+
+
+/*ASM Implementation of readPin*/
+int readPin (int pin) {
+    int offset = ((pin / 32) + 13) * 4;
+    int pinSet = pin % 32;
+    int r;
+    asm(
+        "\tLDR R0, %[gpi]\n"
+        "\tMOV R1, R0\n"
+        "\tADD R1, %[offset]\n"
+        "\tLDR R1, [R1]\n"
+        "\tMOV R2, #1\n"
+        "\tLSL R2, %[pinShift]\n"
+        "\tAND %[r], R2, R1\n"
+        : [r] "=r" (r)
+        : [gpi] "m" (gpio),
+          [offset] "r" (offset),
+          [pinShift] "r" (pinSet)
+        : "r0", "r1", "r2", "cc", "memory"
+    );
+
+    if (r != 0)
+      return 1;
+    return 0;
+}
+
+
+volatile uint32_t getTime() {
+    return *(timer + 1);
+}
+
+//Button Code
+int getButtonInput() {
+    int in = 0;
+    uint32_t times = getTime();
+    while ((getTime() - times) < 80000) {
+        if(readPin(16))
+        {
+            in++;
+    }
+    return in;
+}
+
+
+
+void timerMemMap() {
+    timerbase = 0x3F003000;
+
+		if ((fd = open ("/dev/mem", O_RDWR | O_SYNC | O_CLOEXEC) ) < 0) {
+      printf("setup: Unable to open /dev/mem: %s\n", strerror (errno));
+      exit(1);
+    }
+    timer = (uint32_t *)timerMemMap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, timerbase);
+    if ((int32_t)timer == -1) {
+      printf("setup: mmap (TIMER) failed: %s\n", strerror (errno));
+      exit(1);
+    }
+}
 
 
 //
@@ -21,29 +84,29 @@ pthread_t threadID;
  * */
 lcdShowResult(int exact, int approximate){
 	char string[20];
-	
+
 	lcdClear(gpio, screen);
 
-	
-	sprintf(string, "Exact: %d", exact);	
+
+	sprintf(string, "Exact: %d", exact);
 	lcdPutString(gpio, screen, string, 0, 0);
-	
+
 	lcdNewLine(gpio, screen);
-	
+
 	sprintf(string, "Approximate: %d", approximate);
 	lcdPutString(gpio, screen, string, 0, 0);
-	
+
 }
 
 /*Function to display appropriate success message on LCD
  * */
 lcdSuccess(int attempts){
 	char string[20];
-	
+
 	lcdClear(gpio, screen);
 	lcdPutString(gpio, screen, "Congratulations!", 0, 350000);
 	lcdNewLine(gpio, screen);
-	
+
 	sprintf(string, "Attempts: %d", attempts);
 	lcdPutString(gpio, screen, string, 0, 0);
 }
@@ -58,7 +121,7 @@ void * lcdBusyThread(void * arg){
 /*
  * A function which prompts the user for input via the LCD.
  * Starts a thread to display the busy symbol. NOTE that no other functions
- * should access the LCD after invoking this function without first invoking 
+ * should access the LCD after invoking this function without first invoking
  * lcdInputReceived.
  * */
 lcdInputPrompt(){
@@ -94,13 +157,13 @@ lcdInputReceived(){
  * */
 pinFlash(int pin, int times){
 	int i =0;
-	
+
 	for (; i<times; i++){
 		digitalWrite(gpio, pin, 1);
 		usleep(500000);
 		digitalWrite(gpio, pin, 0);
 		usleep(500000);
-	}	
+	}
 }
 
 /*
@@ -121,7 +184,7 @@ greenFlash(int times){
  * Function for showing the results via LEDs
  * */
 ledShowResult(int exact, int approximate){
-	
+
 	greenFlash(exact);
 	redFlash(1);
 	greenFlash(approximate);
@@ -153,19 +216,19 @@ ledSuccess(){
  * */
 initialiseMastermindIO(){
 	int dataPins[4] = {23, 17, 27, 22};
-	
+
 	redPin = 5;
 	greenPin = 6;
 	threadID = -314;
 	gpio = getGPIO();
-	
+
 	screen = lcdFactory(2, 16, lcdPinSetFactory(gpio, 24, 25, dataPins));
-	
+
 	lcdInitialise(gpio, screen);
-	
+
 	pinMode(gpio, redPin, GPFSEL_OUTPUT);
 	digitalWrite(gpio, redPin, 0);
-	
+
 	pinMode(gpio, greenPin, GPFSEL_OUTPUT);
 	digitalWrite(gpio, greenPin, 0);
 }
@@ -179,7 +242,7 @@ initialiseMastermindIO(){
 welcomeMessage(){
 	digitalWrite(gpio, redPin, 1);
 	digitalWrite(gpio, greenPin, 1);
-	
+
 	lcdPutString(gpio, screen, "Duffy ", 0, 0);
 	lcdLineFeed(gpio, screen);
 	lcdPutString(gpio, screen, "and ", 0, 0);
@@ -189,8 +252,8 @@ welcomeMessage(){
 	usleep(500000);
 	lcdPutString(gpio, screen, "Proudly  Present", 0, 250000);
 	usleep(2000000);
-	
-	
+
+
 	lcdHome(gpio, screen);
 	lcdClear(gpio, screen);
 	lcdPutString(gpio, screen, "Proudly  Present", 0, 0);
@@ -206,37 +269,37 @@ welcomeMessage(){
 	lcdNewLine(gpio, screen);
 	lcdPutString(gpio, screen, "Production...", 0, 0);
 	usleep(1000000);
-	
+
 
 	screen->cursorX=21;
 	screen->cursorY=0;
 	lcdSyncCursor(gpio, screen);
-	
+
 	lcdPutString(gpio, screen, "Mastermind", 0, 0);
-	
+
 	int i =0;
 	for (; i<21;i++){
 		usleep(250000);
 		lcdCommand(gpio, screen, INST_SHIFT | SHIFT_DISPLAY);
 	}
-	
+
 	screen->cursorX=34;
 	screen->cursorY=1;
 	lcdSyncCursor(gpio, screen);
 	lcdCommand(gpio, screen, INST_ENTRY);
 	lcdCommand(gpio, screen, INST_DISPLAY | DISPLAY_DISPLAY | DISPLAY_CURSOR | DISPLAY_BLINK);
-	
+
 	lcdPutString(gpio, screen, "noitidE iP", 0, 125000);
-	
+
 	usleep(3000000);
-	
+
 	lcdCommand(gpio, screen, INST_ENTRY | ENTRY_INC);
 	lcdCommand(gpio, screen, INST_DISPLAY | DISPLAY_DISPLAY);
 	lcdClear(gpio, screen);
 	lcdHome(gpio, screen);
-	
+
 	digitalWrite(gpio, redPin, 0);
 	digitalWrite(gpio, greenPin, 0);
-	
+
 }
 #endif
