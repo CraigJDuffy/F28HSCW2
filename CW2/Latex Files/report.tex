@@ -28,6 +28,7 @@
 	\end{titlepage}
 	\pagebreak
 	
+	\setcounter{tocdepth}{1}
 	\tableofcontents
 	
 	\clearpage
@@ -72,25 +73,41 @@ LCD data pins 4, 5, 6, and 7 were connected to GPIO pins 23, 17, 27, and 22 resp
 
 \section{Code structure}
 
-The code was dived amongst 4 separate source files: Logic, MastermindIO, GeneralIO, and LCDIO. Each is discussed separately below.
+The code was dived amongst 4 separate source files: Logic, MastermindIO, GeneralIO, and LCDIO. Each is discussed separately below. 
+\\
+\\
+To ensure proper dependency representation, both MastermindIO and LCDIO include GeneralIO with the \texttt{\#include} directive. To prevent issues with including the same file multiple times both for this project and in future, all files (except Logic.c) have inclusion guards so they are only included once when compiling. This is required as the MastermindIO file also includes LCDIO alongside GeneralIO (so GeneralIO would be included twice at compilation). The only file included in Logic.c is MastermindIO, for reasons clear below.
 
 \subsection{Logic}
 
-This as the name suggests is the implementation of the logic of Mastermind, and contains the main function for the software. It deals at a high level of abstraction, dealing only with the production of code sequences and processing of guesses, producing the correct values for output. No hardware details whatsoever are implemented here, rather this code makes calls to functions in the MastermindIO source file for all I/O requirements.
+This as the name suggests is the implementation of the logic of Mastermind, and contains the main function for the software as a whole. It acts at a high level of abstraction, dealing only with the production of code sequences and processing of guesses, producing the correct values for output. No hardware details whatsoever are implemented here, rather this code makes calls to functions in the MastermindIO source file for all I/O requirements.
 
 \subsection{MastermindIO}
 
-MastermndIO is the source file responsible for implementation specific details, designed to accommodate the requirements of the Logic file. As such, this file is where the specific pin numbers relating to LEDs, the LCD, and the button are stored as well as the memory mapped GPIO registers which get passed off to GeneralIO and LCDIO as required. This file makes calls to both the high level functions of LCDIO and the low level functions of GeneralIO in order to achieve the desired effects. While much of its work with the LCD is done through higher-level functions, for some of the special effects of the intro sequence it relies on lower-level LCDIO functions, introducing a certain amount of coupling. As part of dealing with the I/O functionality, this file also implements the multi-threading required for the input prompt on the LCD.
+MastermndIO is the source file responsible for implementation specific details, designed specifically to accommodate the requirements of the Logic file. As such, this file is where the specific pin numbers relating to LEDs, the LCD, and the button are stored as well as the memory mapped GPIO registers which get passed off to GeneralIO and LCDIO as required. This file makes calls to both the high level functions of LCDIO and the low level functions of GeneralIO in order to achieve the desired effects. While much of its work with the LCD is done through higher-level functions, for some of the special effects of the intro sequence it relies on lower-level LCDIO functions, introducing a certain amount of coupling. As part of dealing with the I/O functionality, this file also implements the multi-threading required for the input prompt on the LCD.
 
 \subsection{LCDIO}
 
-In order to interface easily with the LCD, this collection of functions was put together to abstract over most of the details of data transfer. It does this by implementing functions at multiple abstraction levels, each building on those below it to finally reach a high level of abstraction. As part of this abstraction, LCDIO is implementation agnostic. Of course it will only run on the Hitachi HD44780U, however it doesn't care about the specific wiring of GPIO pins, and even though it takes the memory mapped GPIO registers as an argument for most functions, it never uses them itself. Both the GPIO registers and BCM pin numbers are just passed on to GeneralIO for use in setting the appropriate pins to the appropriate values.
+In order to interface easily with the LCD, this collection of functions was put together to abstract over most of the details of data transfer. It does this by implementing functions at multiple abstraction levels, each building on those below it to finally reach a high level of abstraction. As part of this abstraction, LCDIO is implementation agnostic. Of course it will only run on the Hitachi HD44780U, however it doesn't care about the specific wiring of GPIO pins, and even though it takes the memory mapped GPIO registers as an argument for most functions, it never uses them itself. Both the GPIO registers and BCM pin numbers are just passed on to GeneralIO for use in setting the appropriate pins to the appropriate values. It would have been easy to implement functions specific to the Mastermind application, however maintaining abstraction reduces coupling, making  ongoing development significantly easier, as well as producing code that may be reused in multiple different ways for various projects. 
 
 \subsection{GeneralIO}
 
-The bedrock of all the I/O functionality, GeneralIO specifies the inline assembly code dealing with setting the state and mode of individual GPIO pins, as well as reading in button presses and memory mapping the GPIO registers. Directly or indirectly, all of the functions declared in LCDIO and MastermindIO depend on this source file. Despite this, there is a minimal amount of coupling between the files.
+The bedrock of all the I/O functionality, GeneralIO represents only the lowest level, most basic functions required for any I/O operations. It specifies the inline assembly code dealing with setting the state and mode of individual GPIO pins, as well as reading in button presses and memory mapping the GPIO registers. Directly or indirectly, all of the functions declared in LCDIO and MastermindIO depend on this source file. Despite this, there is a minimal amount of coupling between the files due to the self contained nature of the functions in GeneralIO.
 
 \section{Hardware Functions}
+
+\subsection{pinMode}
+
+The \texttt{PinMode} function as the name suggests is used for setting the function of a pin using the GPFSEL register using a combination of C and inline assembly. C code is used for calculating the register and bit offset to simplify matters, though it should prove trivial to move the calculations into the inline assembly component. The assembly componenet takes the results alongside the address of GPIO as mapped and the function code and performs the act of writing into the appropriate GPFSEL register to set the pin mode. Before writing, the assembly zeroes the three bits in order to reset the pin function and ensure the correct 3 bits are written.
+
+\subsection{digitalWrite}
+
+Utilising only inline assembly, \texttt{digitalWrite} sets a given pin to either a high or low state using potentially an unintuitive methodology. In order to minimise instructions the function incrementally increases the base address of GPIO to point to the necessary register. First the address is incremented to point at GPSET0, the first of the set and clear registers. The state to set the pin to is then evaluated, with the address increased to point at GPCLR0 if the state \textbf{does not} equal 1 (so any value passed other than 1 is considered a low state). Finally the pin number itself is evaluated. If the pin is greater than 32, then the address is incremented by 4 bytes to point to either GPSET1 or GPCLR1 and 32 subtracted from the pin to give the bit offset. A single bit is written to the position indicated by the calculated bit offset in whichever register the address currently indicates.
+\\ \\
+As a point of further improvement, the branch instructions used can be incorporated into the instructions which they jump over. So instead of a branch condition followed by another operation which it may or may not skip, the other skipped operation can be made to execute only if the condition is met. This is possible due to the ARM assembly language, which allows certain instructions like MOV to be made conditional.
+
+
+\subsection{NameofButtonReadFunction}
 
 \section{Debug Execution}
 
