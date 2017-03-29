@@ -4,9 +4,7 @@
 #include <pthread.h>
 #include "LCDIO.c"
 #include "GeneralIO.c"
-#include <time.h>
 
-#define BUTTON 16
 
 
 static volatile int * gpio;
@@ -15,63 +13,7 @@ static int redPin, greenPin;
 pthread_t threadID;
 
 
-/*ASM Implementation of readPin*/
-int readPin (int pin) {
-    int offset = ((pin / 32) + 13) * 4;
-    int pinSet = pin % 32;
-    int r;
-    asm(
-        "\tLDR R0, %[gpi]\n"
-        "\tMOV R1, R0\n"
-        "\tADD R1, %[offset]\n"
-        "\tLDR R1, [R1]\n"
-        "\tMOV R2, #1\n"
-        "\tLSL R2, %[pinShift]\n"
-        "\tAND %[r], R2, R1\n"
-        : [r] "=r" (r)
-        : [gpi] "m" (gpio),
-          [offset] "r" (offset),
-          [pinShift] "r" (pinSet)
-        : "r0", "r1", "r2", "cc", "memory"
-    );
 
-    if (r != 0)
-      return 1;
-    return 0;
-}
-
-
-volatile uint32_t getTime() {
-    return *(timer + 1);
-}
-
-//Button Code
-int getButtonInput() {
-    int in = 0;
-    uint32_t times = getTime();
-    while ((getTime() - times) < 80000) {
-        if(readPin(16))
-        {
-            in++;
-    }
-    return in;
-}
-
-
-
-void timerMemMap() {
-    timerbase = 0x3F003000;
-
-		if ((fd = open ("/dev/mem", O_RDWR | O_SYNC | O_CLOEXEC) ) < 0) {
-      printf("setup: Unable to open /dev/mem: %s\n", strerror (errno));
-      exit(1);
-    }
-    timer = (uint32_t *)timerMemMap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, timerbase);
-    if ((int32_t)timer == -1) {
-      printf("setup: mmap (TIMER) failed: %s\n", strerror (errno));
-      exit(1);
-    }
-}
 
 
 //

@@ -97,6 +97,7 @@ int readPin (int pin) {
 volatile uint32_t getTime() {
     return *(timer + 1);
 }
+
 void timerMemMap() {
     timerBase = 0x3F003000;
 
@@ -122,6 +123,7 @@ int getButtonInput() {
     }
     return in;
 }
+
 /*
  * Convenience function handling the memory mapping of GPIO
  * */

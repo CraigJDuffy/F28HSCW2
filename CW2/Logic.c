@@ -17,15 +17,15 @@ int debug, codeLength;
 Result checkGuess(int * guess, int * answer){
 	int index =0, approx=0, exact=0, inner;
 	Result res= {0, 0};
-	
+
 	//Since this function alters the guess and answer arrays, a copy is required.
 	int * answercpy = malloc(sizeof(*answercpy) * codeLength);
 	memcpy(answercpy, answer, sizeof(*answercpy) * codeLength);
-	
+
 	//Note that all exact checks must be performed before
 	//inexact checking. This is beacuse some approximate gusses
 	//may end up overwriting exact matches otherwise.
-	
+
 	for (;index<codeLength;index++){
 		if (guess[index] == answercpy[index]){
 			exact++;
@@ -42,10 +42,10 @@ Result checkGuess(int * guess, int * answer){
 			}
 		}
 	}
-	
+
 	free(answercpy);
 	free(guess);
-	
+
 	//This function cannot return guess, as it has modified the values.
 	res.exact=exact;
 	res.approximate = approx;
@@ -55,24 +55,21 @@ Result checkGuess(int * guess, int * answer){
 int * getGuess(){
 	int * guess;
 	int i;
-	
+
 	guess = malloc(sizeof(*guess) * codeLength);
-	
-	//ARM assembly goes here
-	
 	printf(">");
 	for (i = 0; i<codeLength; i++){
-		scanf("%d", &guess[i]);
+		guess[i] = getButtonInput(); 
 	}
-	
+
 	return guess;
 }
 
 void showResult(Result res){
-	
+
 	lcdShowResult(res.exact, res.approximate);
 	ledShowResult(res .exact, res.approximate);
-	
+
 	if(debug) printf("Exact: %d\nApproximate: %d\n", res.exact, res.approximate);
 }
 
@@ -80,16 +77,16 @@ int * generateAnswer(int colourCount){
 	int * answer;
 	answer = malloc(sizeof(*answer) * codeLength);
 	int i;
-	
+
 	if (debug) printf("Secret code: ");
-	
+
 	for (i=0; i<codeLength; i++){
 		answer[i] = (rand() % colourCount) +1; //+1 required else answer code may include 0
 		if (debug) printf("%d  ", answer[i]);
 	}
-	
+
 	if (debug) printf("\n");
-	
+
 	return answer;
 }
 
@@ -97,17 +94,17 @@ void main(int argc, char ** argv){
 	int * answer, * guess;
 	Result res;
 	int opt, cCount, attempts;
-	
+
 	debug = 0; //Initialise
 	codeLength = 3;
 	cCount=3;
 	attempts=0;
 	srand(time(NULL)); //NULL is where time() would otherwise store the result of the call
-	
+
 	answer=malloc(sizeof(*answer) * codeLength);
-	
+
 	initialiseMastermindIO();
-	
+
 	opterr=0;
 	while((opt=getopt(argc, argv, "dc:n:")) != -1){
 		switch(opt){
@@ -135,15 +132,15 @@ void main(int argc, char ** argv){
 			exit(0);
 		}
 	}
-	
+
 	if (cCount<=0 || codeLength<=0) {
 		printf("Argument options must be greater than 0");
 		exit(0);
 	}
-	
+
 	answer = generateAnswer(cCount);
 	welcomeMessage();
-	
+
 	//The loop goes forever if a letter is input when prompted.
 	//I have no idea why.
 	//Doesn't matter, the input's meant to be assembly anyway.
@@ -158,7 +155,7 @@ void main(int argc, char ** argv){
 		showResult(res);
 		usleep(100000);
 	} while (1);
-	
+
 	lcdSuccess(attempts);
 	ledSuccess();
 }
