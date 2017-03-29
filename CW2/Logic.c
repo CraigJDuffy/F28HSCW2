@@ -59,7 +59,7 @@ int * getGuess(){
 	guess = malloc(sizeof(*guess) * codeLength);
 	printf(">");
 	for (i = 0; i<codeLength; i++){
-		guess[i] = getButtonInput(); 
+		guess[i] = getButtonInput();
 	}
 
 	return guess;
@@ -104,6 +104,8 @@ void main(int argc, char ** argv){
 	answer=malloc(sizeof(*answer) * codeLength);
 
 	initialiseMastermindIO();
+	timerMemMap();
+	
 
 	opterr=0;
 	while((opt=getopt(argc, argv, "dc:n:")) != -1){

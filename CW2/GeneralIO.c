@@ -17,6 +17,10 @@
 
 #define BUTTON 16
 #define TIMEOUT 8000
+
+static volatile uint32_t *timer;
+static volatile unsigned int timerbase;
+
 /*
  * Inline Assembly method for setting the function of a BCM pin
  * */
