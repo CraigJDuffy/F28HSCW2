@@ -97,19 +97,17 @@ int readPin (int pin) {
 volatile uint32_t getTime() {
     return *(timer + 1);
 }
-
-
 void timerMemMap() {
-    timerbase = 0x3F003000;
+    timerBase = 0x3F003000;
 
 		if ((fd = open ("/dev/mem", O_RDWR | O_SYNC | O_CLOEXEC) ) < 0) {
-      printf("setup: Unable to open /dev/mem: %s\n", strerror (errno));
-      exit(1);
+		printf("cannot open /dev/main\n");
+      exit(0);
     }
-    timer = (uint32_t *)timerMemMap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, timerbase);
-    if ((int32_t)timer == -1) {
-      printf("setup: mmap (TIMER) failed: %s\n", strerror (errno));
-      exit(1);
+    timer = (uint32_t *)timerMemMap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, timerBase);
+    if ((int32_t)timer < 0) {
+		printf("Can't mmap\n");
+		exit(0);
     }
 }
 
@@ -140,7 +138,7 @@ volatile int * getGPIO(){
 	gpio = mmap(0, BlockSize, PROT_READ | PROT_WRITE , MAP_SHARED, fd, GPIO_Base);
 
 	if ((int) gpio ==-1 ){
-		printf("Can't mmap\n");
+
 		exit(0);
 	}
 
