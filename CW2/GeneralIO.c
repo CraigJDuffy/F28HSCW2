@@ -18,8 +18,6 @@
 #define BUTTON 16
 #define TIMEOUT 8000
 
-static volatile uint32_t *timer;
-static volatile unsigned int timerbase;
 
 /*
  * Inline Assembly method for setting the function of a BCM pin
@@ -98,35 +96,6 @@ int readPin (int pin) {
     return 0;
 }
 
-volatile uint32_t getTime() {
-    return *(timer + 1);
-}
-
-void timerMemMap() {
-    timerBase = 0x3F003000;
-
-		if ((fd = open ("/dev/mem", O_RDWR | O_SYNC | O_CLOEXEC) ) < 0) {
-		printf("cannot open /dev/main\n");
-      exit(0);
-    }
-    timer = (uint32_t *)timerMemMap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, timerBase);
-    if ((int32_t)timer < 0) {
-		printf("Can't mmap\n");
-		exit(0);
-    }
-}
-
-//Button Code
-int getButtonInput() {
-    int in = 0;
-    uint32_t times = getTime();
-    while ((getTime() - times) < TIMEOUT) {
-        if(readPin(BUTTON))
-        {
-            in++;
-    }
-    return in;
-}
 
 /*
  * Convenience function handling the memory mapping of GPIO

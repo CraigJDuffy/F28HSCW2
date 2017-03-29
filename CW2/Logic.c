@@ -104,7 +104,7 @@ void main(int argc, char ** argv){
 	answer=malloc(sizeof(*answer) * codeLength);
 
 	initialiseMastermindIO();
-	timerMemMap();
+
 	
 
 	opterr=0;
