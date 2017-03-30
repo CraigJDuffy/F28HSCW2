@@ -93,7 +93,7 @@ In order to interface easily with the LCD, this collection of functions was put 
 \subsection{GeneralIO}
 
 The bedrock of all the I/O functionality, GeneralIO represents only the lowest level, most basic functions required for any I/O operations. It specifies the inline assembly code dealing with setting the state and mode of individual GPIO pins, as well as reading in button presses and memory mapping the GPIO registers. Directly or indirectly, all of the functions declared in LCDIO and MastermindIO depend on this source file. Despite this, there is a minimal amount of coupling between the files due to the self contained nature of the functions in GeneralIO.
-
+\pagebreak
 \section{Hardware Functions}
 
 \subsection{pinMode}
@@ -107,9 +107,15 @@ Utilising only inline assembly, \texttt{digitalWrite} sets a given pin to either
 As a point of further improvement, the branch instructions used can be incorporated into the instructions which they jump over. So instead of a branch condition followed by another operation which it may or may not skip, the other skipped operation can be made to execute only if the condition is met. This is possible due to the ARM assembly language, which allows certain instructions like MOV to be made conditional.
 
 
-\subsection{NameofButtonReadFunction}
+\subsection{readPin}
+The pinRead function makes use of a blend of C and in-line assembly code. Using C a few variables are set-up to hold the offset  value, the value of the pin which we wish to write to in the assembly, and variable r which will ultimately decide the return value of the function. Then, the assembly makes use of the parameter pin to return its value as variable \textit{r} if \textit{r} is not equal to zero then one is returned otherwise, zero is returned. 
+
 
 \section{Debug Execution}
+\begin{center}
+	\includegraphics{Debug}
+\end{center}
+
 
 \section{Summary}
 

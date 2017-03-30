@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <time.h>
+
 
 
 #define BlockSize (4*1024)
@@ -14,9 +14,6 @@
 
 #define GPFSEL_OUTPUT 0x01
 #define GPFSEL_INPUT 0x00
-
-#define BUTTON 16
-#define TIMEOUT 8000
 
 
 /*
@@ -72,7 +69,7 @@ digitalWrite(volatile int * gpio, int pin, int state){
 
 
 /*Inline Assembly function readPin*/
-int readPin (int pin) {
+int readPin (volatile int * gpio, int pin) {
     int offset = ((pin / 32) + 13) * 4;
     int pinSet = pin % 32;
     int r;

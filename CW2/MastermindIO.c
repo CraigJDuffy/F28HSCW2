@@ -2,17 +2,21 @@
 #define MASTERMINDIO
 
 #include <pthread.h>
+#include <time.h>
 #include "LCDIO.c"
 #include "GeneralIO.c"
 
 
+#define BLOCK_SIZE (4*1024)
+#define BUTTON 19
+#define TIMEOUT 4
 
 static volatile int * gpio;
 static LCD * screen;
 static int redPin, greenPin;
 pthread_t threadID;
 static volatile uint32_t *timer;
-static volatile unsigned int timerbase;
+static volatile unsigned int timerBase;
 
 
 
@@ -123,6 +127,12 @@ greenFlash(int times){
 	pinFlash(greenPin, times);
 }
 
+
+ledInputRecieved(int input){
+	redFlash(1);
+	greenFlash(input);
+}
+
 /*
  * Function for showing the results via LEDs
  * */
@@ -152,33 +162,18 @@ ledSuccess(){
 //Button Functions
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-volatile uint32_t getTime() {
-    return *(timer + 1);
-}
 
-void timerMemMap() {
-    timerBase = 0x3F003000;
-
-		if ((fd = open ("/dev/mem", O_RDWR | O_SYNC | O_CLOEXEC) ) < 0) {
-		printf("cannot open /dev/main\n");
-      exit(0);
-    }
-    timer = (uint32_t *)timerMemMap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, timerBase);
-    if ((int32_t)timer < 0) {
-		printf("Can't mmap\n");
-		exit(0);
-    }
-}
-
-//Button Code
 int getButtonInput() {
     int in = 0;
-    uint32_t times = getTime();
-    while ((getTime() - times) < TIMEOUT) {
-        if(readPin(BUTTON))
-        {
+    time_t stime;
+    time(&stime);
+    while ((time(NULL) - stime) < TIMEOUT) {
+        if(readPin(gpio, BUTTON)){
+			usleep(300000);
             in++;
-    }
+		}
+	}
+	
     return in;
 }
 
@@ -204,7 +199,6 @@ initialiseMastermindIO(){
 	greenPin = 6;
 	threadID = -314;
 	gpio = getGPIO();
-	timerMemMap();
 
 	screen = lcdFactory(2, 16, lcdPinSetFactory(gpio, 24, 25, dataPins));
 

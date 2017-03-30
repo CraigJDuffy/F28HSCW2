@@ -57,10 +57,13 @@ int * getGuess(){
 	int i;
 
 	guess = malloc(sizeof(*guess) * codeLength);
-	printf(">");
 	for (i = 0; i<codeLength; i++){
 		guess[i] = getButtonInput();
+		if (debug) printf("Input: %d\n", guess[i]);
+		ledInputRecieved(guess[i]);
 	}
+
+	redFlash(2);
 
 	return guess;
 }
@@ -142,10 +145,6 @@ void main(int argc, char ** argv){
 
 	answer = generateAnswer(cCount);
 	welcomeMessage();
-
-	//The loop goes forever if a letter is input when prompted.
-	//I have no idea why.
-	//Doesn't matter, the input's meant to be assembly anyway.
 
 	do {
 		lcdInputPrompt();		//begin thread
